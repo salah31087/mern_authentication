@@ -9,10 +9,10 @@ import { AuthProvider } from './context/AuthProvider.jsx';
 
 createRoot(document.getElementById('root')).render(
   <Theme appearance="dark" accentColor="cyan" grayColor="gray" radius="small">
-    <AuthProvider>
-      <BrowserRouter>
+    <BrowserRouter>
+      <AuthProvider>
         <App />
-      </BrowserRouter>
-    </AuthProvider>
+      </AuthProvider>
+    </BrowserRouter>
   </Theme>
 )

@@ -1,5 +1,6 @@
-import React, { useState, useEffect, createContext } from 'react';
+import React, { useState, useEffect, createContext, useCallback } from 'react';
 import axios from '../configs/axios';
+import { useNavigate } from 'react-router-dom';
 
 const AuthContext = createContext({});
 
@@ -7,7 +8,46 @@ export const AuthProvider = ({ children }) => {
     const [auth, setAuth] = useState(false);
     const [loading, setLoading] = useState(true);
     const [errorMessage, setErrorMessage] = useState('');
-    const [csrf, setCsrf] = useState('')
+    const [csrf, setCsrf] = useState('');
+    const navigate = useNavigate();
+
+    // Function to handle unauthorized responses
+    const handleUnauthorized = useCallback(() => {
+        setAuth(false);
+        setErrorMessage('Session expired. Please login again.');
+        navigate('/login');
+    }, [navigate]);
+
+    // Add axios interceptors
+    useEffect(() => {
+        // Request interceptor for adding CSRF token
+        const requestInterceptor = axios.interceptors.request.use(
+            (config) => {
+                if (csrf) {
+                    config.headers['XSRF-TOKEN'] = csrf;
+                }
+                return config;
+            },
+            (error) => Promise.reject(error)
+        );
+
+        // Response interceptor for handling token expiration
+        const responseInterceptor = axios.interceptors.response.use(
+            (response) => response,
+            (error) => {
+                if (error.response?.status === 401) {
+                    handleUnauthorized();
+                }
+                return Promise.reject(error);
+            }
+        );
+
+        // Cleanup interceptors
+        return () => {
+            axios.interceptors.request.eject(requestInterceptor);
+            axios.interceptors.response.eject(responseInterceptor);
+        };
+    }, [csrf, handleUnauthorized]);
 
     useEffect(() => {
         const checkAuth = async () => {
@@ -50,43 +90,38 @@ export const AuthProvider = ({ children }) => {
             }
         };
 
-
         getCsrf();
         checkAuth();
     }, []);
-
 
     //? Login function
     const login = async (email, password) => {
         try {
             const response = await axios.post('/login', { email, password }, {
-                withCredentials: true,
-                headers: { 'XSRF-TOKEN': csrf }
+                withCredentials: true
             });
             const { token } = response.data;
             setAuth({ token });
-            console.log('Login successful');
-            setErrorMessage(''); // Clear any previous error messages
+            setErrorMessage('');
+            navigate('/dashboard');
         } catch (error) {
-            // Enhanced error handling based on the response
             if (error.response) {
                 const status = error.response.status;
-
-                // Capture error messages based on status
                 if (status === 401) {
-                    setErrorMessage('Unauthorized: Invalid email or password');
+                    setErrorMessage('Invalid email or password');
                 } else if (status === 403) {
-                    setErrorMessage('Forbidden: Access denied');
+                    setErrorMessage('Access denied');
+                } else if (status === 429) {
+                    setErrorMessage('Too many attempts. Please try again later.');
                 } else {
                     setErrorMessage(error.response.data.message || 'An error occurred');
                 }
             } else if (error.request) {
-                // Handle network errors
-                setErrorMessage('No response from server. Please check your network connection.');
+                setErrorMessage('No response from server. Please check your connection.');
             } else {
-                // General client-side error
-                setErrorMessage(error.message);
+                setErrorMessage('An unexpected error occurred');
             }
+            console.error('Login error:', error);
         }
     };
 
@@ -94,35 +129,30 @@ export const AuthProvider = ({ children }) => {
     const signup = async (username, email, password) => {
         try {
             const response = await axios.post('/signup', { username, email, password }, {
-                withCredentials: true,
-                headers: { 'XSRF-TOKEN': csrf }
+                withCredentials: true
             });
-
             const { token } = response.data;
-
-            // Set authentication token (or any other auth-related state)
             setAuth({ token });
-
-            console.log('Signup successful');
-            setErrorMessage(''); // Clear error messages on successful signup
+            setErrorMessage('');
+            navigate('/dashboard');
         } catch (error) {
-            // Enhanced error handling
             if (error.response) {
                 const status = error.response.status;
                 if (status === 400) {
                     setErrorMessage(error.response.data.message || 'Invalid input');
                 } else if (status === 409) {
-                    setErrorMessage('User already exists');
+                    setErrorMessage('Email already exists');
+                } else if (status === 429) {
+                    setErrorMessage('Too many attempts. Please try again later.');
                 } else {
-                    setErrorMessage(`Error ${status}: ${error.response.data.message || 'Signup failed'}`);
+                    setErrorMessage(`Error: ${error.response.data.message || 'Signup failed'}`);
                 }
             } else if (error.request) {
-                setErrorMessage('No response from the server. Please try again later.');
+                setErrorMessage('No response from server. Please try again later.');
             } else {
-                setErrorMessage(error.message);
+                setErrorMessage('An unexpected error occurred');
             }
-
-            console.error('Signup failed:', error);
+            console.error('Signup error:', error);
         }
     };
 
@@ -130,16 +160,17 @@ export const AuthProvider = ({ children }) => {
     const logout = async () => {
         try {
             await axios.post('/logout', {}, {
-                withCredentials: true,
-                headers: { 'XSRF-TOKEN': csrf }
-            }); // Call your logout API if necessary
-            setAuth(false); // Clear authentication state
-            console.log('Logout successful');
+                withCredentials: true
+            });
+            setAuth(false);
+            navigate('/login');
         } catch (error) {
-            console.error('Logout failed:', error);
+            console.error('Logout error:', error);
+            // Force logout on client side even if server request fails
+            setAuth(false);
+            navigate('/login');
         }
     };
-
 
     return (
         <AuthContext.Provider value={{ auth, setAuth, csrf, loading, login, signup, logout, errorMessage }}>
@@ -149,4 +180,3 @@ export const AuthProvider = ({ children }) => {
 };
 
 export default AuthContext;
-

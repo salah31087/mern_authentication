@@ -70,8 +70,11 @@ export const signup = async (req, res) => {
         // Set token in a secure HTTP-only cookie
         res.cookie('token', token, {
             httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
             maxAge: maxAge * 1000,
-            secure: process.env.NODE_ENV === 'production' // Only secure in production
+            path: '/',
+            domain: process.env.COOKIE_DOMAIN
         });
 
         res.status(201).json({ message: 'User created successfully', user: user._id });
@@ -126,8 +129,11 @@ export const login = async (req, res) => {
         // Set the token in an HTTP-only cookie (secure should be true in production)
         res.cookie('token', token, {
             httpOnly: true,
-            maxAge: maxAge * 1000, // Adjust maxAge as per your requirement
-            secure: process.env.NODE_ENV === 'production' // Use secure cookies in production
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: maxAge * 1000,
+            path: '/',
+            domain: process.env.COOKIE_DOMAIN
         });
 
 
